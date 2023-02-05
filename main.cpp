@@ -10,17 +10,28 @@
 #include <cassert>
 #include <sys/epoll.h>
 
-#include "locker.h"
 #include "threadpool.h"
-#include "http_conn.h"
+#include "http_msg.h"
+#include "utils.h"
+
 
 #define MAX_FD 10
 #define MAX_EVENT_NUMBER 1024
 
-extern int addfd( int epollfd, int fd, bool one_shot );
-extern int removefd( int epollfd, int fd );
 
 
+void addfd(int epollfd, int fd, bool one_shot)
+{
+    epoll_event event;
+    event.data.fd = fd;
+    event.events = EPOLLIN | EPOLLET | EPOLLRDHUP;
+    if (one_shot)
+    {
+        event.events |= EPOLLONESHOT;
+    }
+    epoll_ctl(epollfd, EPOLL_CTL_ADD, fd, &event);
+    setNonBlocking(fd);
+}
 
 void addsig( int sig, void( handler )(int), bool restart = true )
 {
@@ -45,24 +56,26 @@ void show_error( int connfd, const char* info )
 int main(int argc, char const *argv[])
 {
     const char* ip = "10.0.4.7"; 
-    int port = 12345;
+    int port = 8888;
     // int port = atoi( argv[1] );
     printf("124.223.47.124 %d\n", port);
     printf("ip:%s, port:%d\n",ip,port);
     addsig( SIGPIPE, SIG_IGN );
 
-    threadpool< http_conn >* pool = NULL;
+    threadpool< EventBase >* pool = NULL;
     try
     {
-        pool = new threadpool< http_conn >;
+        pool = new threadpool< EventBase >;
     }
     catch( ... )
     {
         return 1;
     }
 
-    http_conn* users = new http_conn[ MAX_FD ];
+    //! 删除, 或许
+    EventBase* users = new EventBase[ MAX_FD ];
     assert( users );
+
     int user_count = 0;
 
     int listenfd = socket( PF_INET, SOCK_STREAM, 0 );
@@ -86,15 +99,18 @@ int main(int argc, char const *argv[])
     epoll_event events[ MAX_EVENT_NUMBER ];
     int epollfd = epoll_create( 5 );
     assert( epollfd != -1 );
-    addfd( epollfd, listenfd, false );
-    http_conn::m_epollfd = epollfd; // 类外初始化静态变量, 所有的user都共用一个epollfd
 
-    // for (int i = 0; i < MAX_FD; i++)
-    // {
-    //     printf("epoll: %d\n", users[i].m_epollfd);
-    // }
+    setNonBlocking(listenfd);
+    ret = addWaitFd(epollfd, listenfd, true, false);
+    if(ret != 0){
+        std::cout << outHead("error") << "添加监控 Listen 套接字失败" << std::endl;
+        return -1;
+    }
+    std::cout << outHead("info") << "epoll 中添加监听套接字成功" << std::endl;
     
 
+    
+    EventBase* event = NULL;
     while( true )
     {
         int number = epoll_wait( epollfd, events, MAX_EVENT_NUMBER, -1 );
@@ -108,46 +124,24 @@ int main(int argc, char const *argv[])
             int sockfd = events[i].data.fd;
             if( sockfd == listenfd )
             {
-                struct sockaddr_in client_address;
-                socklen_t client_addrlength = sizeof( client_address );
-                int connfd = accept( listenfd, ( struct sockaddr* )&client_address, &client_addrlength );
-                if ( connfd < 0 )
-                {
-                    printf( "errno is: %d\n", errno );
-                    continue;
-                }
-                if( http_conn::m_user_count >= MAX_FD )
-                {
-                    show_error( connfd, "Internal server busy" );
-                    continue;
-                }
-                users[connfd].init( connfd, client_address );
+                event = new AcceptConn(sockfd, epollfd);
             }
             else if( events[i].events & ( EPOLLRDHUP | EPOLLHUP | EPOLLERR ) )
             {
-                users[sockfd].close_conn();
+                // users[sockfd].close_conn();
             }
             else if( events[i].events & EPOLLIN )
             {
-                // 有 http 请求 (sockfd==connfd)
-                if( users[sockfd].read() )
-                {
-                    pool->append( users + sockfd ); // 之后就会有线程来process这个user
-                }
-                else
-                {
-                    users[sockfd].close_conn();
-                }
+                event = new HandleRecv(events[i].data.fd, epollfd);
             }
             else if( events[i].events & EPOLLOUT )
             {
-                if( !users[sockfd].write() )
-                {
-                    users[sockfd].close_conn();
-                }
+                event = new HandleSend(events[i].data.fd, epollfd);
             }
             else
             {}
+
+            pool->append(event);
         }
     }
     close( epollfd );

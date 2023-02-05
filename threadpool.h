@@ -7,14 +7,13 @@
 #include <pthread.h>
 #include <string>
 #include "locker.h"
-
-
+#include "utils.h"
 
 template <typename T>
 class threadpool
 {
 public:
-    threadpool(int thread_number = 2, int max_requests = 10000);
+    threadpool(int thread_number = 5, int max_requests = 10000);
     ~threadpool();
     bool append(T *request); // 添加请求
 
@@ -45,28 +44,23 @@ threadpool<T>::threadpool(int thread_number, int max_requests)
     // 创建线程
     for (int i = 0; i < m_thread_number; i++)
     {
-        printf("create the %dth thread\n", i);        
+        
         this->temp_thread_number = i;
         if (pthread_create(m_threads + i, NULL, worker, this) != 0) // 传this, static函数内能调用
         {
             delete[] m_threads;
             throw std::exception();
         }
-        // const char* thread_name = std::to_string(i).c_str();
-        // if (pthread_setname_np(*(m_threads + i), thread_name) != 0) // 设置名字
-        // {
-        //     delete[] m_threads;
-        //     throw std::exception();
-        // }
+
         if (pthread_detach(m_threads[i])) // 与主控线程分离
         {
             delete[] m_threads;
             throw std::exception();
         }
+        std::cout << outHead("info") << "创建新线程, No.= " << i << " 成功" << std::endl;
         usleep(100000);
     }
 }
-
 
 template <typename T>
 threadpool<T>::~threadpool()
@@ -92,11 +86,11 @@ bool threadpool<T>::append(T *request)
 
 template <typename T>
 void *threadpool<T>::worker(void *arg)
-{   
-    
-    threadpool *this_ptr = (threadpool *)arg; // 先获取this指针
+{
+
+    threadpool *this_ptr = (threadpool *)arg;     // 先获取this指针
     int thread_no = this_ptr->temp_thread_number; // 获取线程号
-    this_ptr->run(thread_no);                          // 运行线程
+    this_ptr->run(thread_no);                     // 运行线程
     return this_ptr;
 }
 
@@ -105,8 +99,6 @@ void threadpool<T>::run(int thread_no)
 {
     while (!m_stop)
     {
-        // 线程通过竞争锁来处理请求
-        printf("No %d thread process waiting for signal\n", thread_no);
         m_queuestat.wait(); // 等待有信号
         m_queuelocker.lock();
         if (m_workqueue.empty())
@@ -121,10 +113,12 @@ void threadpool<T>::run(int thread_no)
         {
             continue;
         }
-        printf("No %d thread process\n", thread_no);
+        //printf("No %d thread process\n", thread_no);
+        std::cout << outHead("info") << "线程, No.= " << thread_no << " 开始处理事件" << std::endl;
         request->process(); // 进行处理
+        std::cout << outHead("info") << "线程, No.= " << thread_no << " 结束处理事件" << std::endl;
     }
-    printf("No %d thread process END!\n", thread_no);
+    std::cout << outHead("info") << "线程, No.= " << thread_no << " 退出\n" << std::endl;
 }
 
 #endif

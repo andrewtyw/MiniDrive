@@ -5,3 +5,8 @@ core.*
 my_http_service.*
 app.*
 commit.sh
+commit_push.sh
+test.cpp
+http_conn.cpp
+http_h.cpp
+*.sh

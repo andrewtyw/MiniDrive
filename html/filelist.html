@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Login</title>
+    <script type="text/javascript">
+        function confirmDelete() {
+            return confirm('You wanna delete it?');
+        }
+        function uploadWin(){
+            var vDiv = document.getElementById('div1');
+            vDiv.style.display = 'block';
+            vDiv.style.zIndex = 10;
+            vDiv.style.position = "absolute";
+
+            var vDiv2 = document.getElementById('div2');
+            vDiv2.style.display = 'block';
+            vDiv2.style.zIndex = 11;
+            vDiv2.style.position = "fixed";
+            vDiv2.style.top = "20%";
+            vDiv2.style.left = "50%";
+            vDiv2.style.marginLeft = "-111px";
+            vDiv2.style.marginTop = "-20px";
+        }
+
+    </script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+        }
+        html {
+            height: 100%;
+        }
+        body {
+            height: 100%;
+        }
+        .container {
+            height: 100%;
+            background-image: linear-gradient(to right, #999999, #330867);
+        }
+        .login-wrapper {
+            width:70%;
+            height: 70%;
+            position: relative;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%,-50%);
+        }
+        .header {
+            font-size: 38px;
+            font-weight: bold;
+            text-align: center;
+            line-height: 100px;
+            color: #ffffff;
+        }
+        table {
+            border-collapse: collapse;
+            border-radius: 15px;
+            font-family: Tahoma, Geneva, sans-serif;
+        }
+        table td {
+            padding-left: 10px;
+            padding-right: 10px;
+            padding-bottom: 10px;
+            padding-top: 10px;
+        }
+        table thead td {
+            background-color: #8353e3;
+            color: #ffffff;
+            font-weight: bold;
+            font-size: 16px;
+            border: 1px solid #8353e3;
+        }
+        table tbody td {
+            color: #101110;
+            border: 1px solid #dddfe1;
+        }
+        table tbody tr {
+            background-color: #f9fafb;
+        }
+        table tbody tr:nth-child(odd) {
+            background-color: #ffffff;
+        }
+        .uploadclass {
+            margin: auto;
+            width:580px;
+            text-align: center;
+            table-layout:fixed;
+            padding: 10px;
+            border-collapse: collapse;
+            border-radius: 0px;
+            border: 1px solid #dddfe1;
+            background-color: #f9fafb;
+        }
+        .col2{
+            width: 70px;
+        }
+        .col3{
+            width: 70px;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="login-wrapper">
+        <div id="div1" style="width: 100%; height: 100%; display: none;text-align: center; background-color: #8b8b8b; opacity: 0.5;" ></div>
+        <div id="div2" style="width: 200px; height: 30px; text-align: center; display: none; padding: 30px 30px; font-size: large; opacity: 1; background-color:#ffffff; border-radius: 20px; border: 1px solid #5e5c5c4b;">正在上传文件...</div>
+
+        <div class="header">File List</div>
+        <table style="width:600px;text-align: center; margin: auto;table-layout:fixed;">
+            <thead>
+            <td style="text-align: center;">Filename</td> <td class="col2"></td> <td class="col3"></td>
+            </thead>
+<!--FILELIST-->
+        </table>
+        <br>
+        <div class="uploadclass">
+            <div>
+                <form id="uploadfile" action="upload"  method="post" enctype="multipart/form-data" style="text-align: center;">
+                    <input type="file" id="upload" name="upload" />
+                    <input type="submit" onclick="uploadWin()" value="Upload this file" style="font-size: 13px; padding: 3px" />
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+</body>
+</html>
