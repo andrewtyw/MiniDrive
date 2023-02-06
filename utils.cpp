@@ -132,3 +132,41 @@ void parseRequestForm(std::unordered_map<std::string, std::string> &map, std::st
         }
     }
 }
+
+
+int64_t SnowFlake::TimeMs()
+{
+    std::chrono::time_point<std::chrono::system_clock, std::chrono::milliseconds> tpMicro = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now());
+    int64_t timeMs = tpMicro.time_since_epoch().count();
+    return timeMs;
+}
+
+int64_t SnowFlake::NextMs(int64_t lastTimeMillis)
+{
+    int64_t currentTimeMillis = TimeMs();
+    while (currentTimeMillis <= lastTimeMillis)
+    {
+        currentTimeMillis = TimeMs();
+    }
+    return currentTimeMillis;
+}
+
+int64_t SnowFlake::UniqueId()
+{
+    int64_t now = TimeMs();
+    if (now == m_lasttm)
+    {
+        m_seq = (m_seq + 1) & m_seqMask;
+        if (m_seq == 0)
+        {
+            now = NextMs(now);
+        }
+    }
+    else
+    {
+        m_seq = 0; // 最大为1024
+    }
+    m_lasttm = now;
+    int64_t uid = (now - m_epoch) << 22 | m_mechine << 16 | pid << 10 | m_seq;
+    return uid;
+}

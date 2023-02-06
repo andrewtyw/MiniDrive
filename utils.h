@@ -11,6 +11,9 @@
 #include <sys/epoll.h>
 #include <sys/fcntl.h>
 
+#include <cstdint>
+#include <unistd.h>
+
 
 // 以 "09:50:19.0619 2022-09-26 [logType]: " 格式返回当前的时间和输出类型，logType 指定输出的类型：
 // init  : 表示服务器的初始化过程
@@ -33,6 +36,34 @@ int setNonBlocking(int fd);
 
 void parseRequestForm(std::unordered_map<std::string, std::string> &map, std::string msg);
 
+class SnowFlake
+{
+public:
+	SnowFlake()
+	{
+		m_seqMask = ~(-1L << 10);
+		m_lasttm = TimeMs();
+        pid = getpid();
+	}
+	virtual ~SnowFlake() {}
+
+	int64_t UniqueId();
+	int64_t TimeMs();
+
+	void SetMechine(int64_t mechine)
+	{
+		m_mechine = mechine;
+	}
+	int64_t NextMs(int64_t now);
+
+private:
+	int64_t m_seq{ 0 };
+	int64_t m_mechine;
+	int64_t m_lasttm{ -1L };
+	int64_t m_seqMask;
+    int64_t pid;
+	int64_t m_epoch{ 1675678403437L }; // 起始时间戳 2023-02-06
+};
 
 
 #endif
