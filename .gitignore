@@ -1,6 +1,5 @@
 .vscode
 *.o
-*.txt
 core.*
 my_http_service.*
 app.*
