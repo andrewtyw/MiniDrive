@@ -3,6 +3,7 @@
 // 类外初始化静态成员
 std::unordered_map<int, Request> EventBase::requestStatus;
 std::unordered_map<int, Response> EventBase::responseStatus;
+SnowFlake EventBase::snowFlakeUtil;
 
 void AcceptConn::process()
 {
@@ -21,6 +22,38 @@ void AcceptConn::process()
     ret = addWaitFd(m_epollFd, accetpFd, true, true);
     assert(ret == 0);
     std::cout << outHead("info") << "接受新连接 " << accetpFd << " 成功" << std::endl;
+}
+
+void HandleSig::process()
+{
+    std::cout << outHead("info") << "接受到信号事件" << std::endl;
+    int sig;
+    char signals[1024];
+    int ret = recv(m_sigPipeFd, signals, sizeof(signals), 0);
+    if (ret <= 0)
+    {
+        return;
+    }
+    else
+    {
+        for (int i = 0; i < ret; ++i)
+        {
+            switch (signals[i])
+            {
+            case SIGALRM:
+            {
+                std::cout << outHead("debug") << "接受到定时信号!" << std::endl;
+                m_session.tick();
+                break;
+            }
+            default:
+                break;
+            }
+        }
+    }
+
+    //! 由于设置了one-shot, 因此要重新注册监听事件
+    modifyWaitFd(m_epollFd, m_sigPipeFd, true, true, false);
 }
 
 void HandleRecv::process()
@@ -62,7 +95,7 @@ void HandleRecv::process()
         }
 
         requestStatus[m_clientFd].recvMsg.append(buf, recvLen);
-        std::cout << outHead("debug") << "读到的数据recvMsg:\n " << requestStatus[m_clientFd].recvMsg << std::endl;
+        // std::cout << outHead("debug") << "读到的数据recvMsg:\n " << requestStatus[m_clientFd].recvMsg << std::endl;
 
         std::string::size_type endIndex = 0; // 标记请求行的结束边界\r\n
 
@@ -112,6 +145,11 @@ void HandleRecv::process()
                 {
                     // 非结束行, 则分析头部选项并保存
                     requestStatus[m_clientFd].addHeaderOpt(curLine);
+                    //! 给repsonse添加cookie
+                    if (requestStatus[m_clientFd].msgHeader.find("Cookie") != requestStatus[m_clientFd].msgHeader.end())
+                    {
+                        responseStatus[m_clientFd].cookieValue = requestStatus[m_clientFd].msgHeader["Cookie"];
+                    }
                 }
             }
         }
@@ -273,8 +311,31 @@ void HandleSend::process()
         else if (opera == "login")
         {
             bool isValidUser = false;
+            std::string unid = "";
             if ((responseStatus[m_clientFd].postForm["username"] == "tywang") && (responseStatus[m_clientFd].postForm["password"] == "123456"))
+            {
                 isValidUser = true;
+
+                // 如果cookieValue在session中存在, 那么重新set就好了
+                if (m_httpSession.findAttribute(responseStatus[m_clientFd].cookieValue))
+                {
+                    unid = responseStatus[m_clientFd].cookieValue;
+                }
+                // 否则set一个新的value
+                else
+                {
+                    unid = std::to_string(snowFlakeUtil.UniqueId());
+                }
+                m_httpSession.setAttribute(unid, "cookie");
+            }
+
+            //! 如果没有通过账号密码登录, 那么在http session 中检查是否有cookie的值
+            if (!isValidUser && m_httpSession.findAttribute(responseStatus[m_clientFd].cookieValue))
+            {
+                unid = responseStatus[m_clientFd].cookieValue;
+                std::cout << outHead("debug") << "Cookie存在, 通过" << std::endl;
+                isValidUser = true;
+            }
 
             if (isValidUser)
             {
@@ -282,12 +343,15 @@ void HandleSend::process()
                 // 响应行
                 responseStatus[m_clientFd].beforeBodyMsg = getStatusLine("HTTP/1.1", "200", "OK");
                 // 响应体
-                std::cout << outHead("debug") << "Mark1: "<<std::endl;
+                std::cout << outHead("debug") << "Mark1: " << std::endl;
                 getFileListPage(responseStatus[m_clientFd].msgBody, "filedir");
-                std::cout << outHead("debug") << "Mark2: "<<std::endl;
+                std::cout << outHead("debug") << "Mark2: " << std::endl;
                 responseStatus[m_clientFd].msgBodyLen = responseStatus[m_clientFd].msgBody.size();
                 // 响应头
                 responseStatus[m_clientFd].beforeBodyMsg += getMessageHeader(std::to_string(responseStatus[m_clientFd].msgBodyLen), "html");
+                //! 设置cookie
+                if (unid != "")
+                    responseStatus[m_clientFd].beforeBodyMsg += getMessageHeaderCookie(unid);
                 responseStatus[m_clientFd].beforeBodyMsg += "\r\n";
                 responseStatus[m_clientFd].beforeBodyMsgLen = responseStatus[m_clientFd].beforeBodyMsg.size();
                 // 设置标识，转换到发送数据的状态
@@ -331,9 +395,123 @@ void HandleSend::process()
         }
         else if (opera == "download")
         {
+            // todo 代码重复, 需要抽出来写个API
+            bool isValidUser = false;
+            std::string unid = "";
+            //! 首先检查cookie
+            if (m_httpSession.findAttribute(responseStatus[m_clientFd].cookieValue))
+            {
+                unid = responseStatus[m_clientFd].cookieValue;
+                std::cout << outHead("debug") << "Cookie存在, 通过" << std::endl;
+                isValidUser = true;
+            }
+
+            if (isValidUser)
+            {
+                std::cout << outHead("info") << "客户端 " << m_clientFd << " 选择下载某个文件:" << filename << std::endl;
+                responseStatus[m_clientFd].beforeBodyMsg = getStatusLine("HTTP/1.1", "200", "OK");
+                responseStatus[m_clientFd].fileMsgFd = open(("filedir/" + filename).c_str(), O_RDONLY);
+                if (responseStatus[m_clientFd].fileMsgFd == -1)
+                { // 文件打开失败时，退出当前函数（避免下面关闭文件造成错误），并重置写事件，在下次进入时回复重定向报文
+                    std::cout << outHead("error") << "客户端 " << m_clientFd << " 的请求消息要下载文件 " << filename << " ，但是文件打开失败，退出当前函数，重新进入用于返回重定向报文，重定向到文件列表" << std::endl;
+                    responseStatus[m_clientFd] = Response();               // 重置 Response
+                    responseStatus[m_clientFd].bodyFileName = "/login";    //! redirect
+                    modifyWaitFd(m_epollFd, m_clientFd, true, true, true); // 重置写事件
+                    return;
+                }
+                else
+                {
+                    // 获取文件信息
+                    struct stat fileStat;
+                    fstat(responseStatus[m_clientFd].fileMsgFd, &fileStat);
+
+                    // 获取文件长度，作为消息体长度
+                    responseStatus[m_clientFd].msgBodyLen = fileStat.st_size;
+                    // 根据消息体构建消息首部
+                    responseStatus[m_clientFd].beforeBodyMsg += getMessageHeader(std::to_string(responseStatus[m_clientFd].msgBodyLen), "file", std::to_string(responseStatus[m_clientFd].msgBodyLen - 1));
+                    if (unid != "")
+                        responseStatus[m_clientFd].beforeBodyMsg += getMessageHeaderCookie(unid);
+                    // 加入空行
+                    responseStatus[m_clientFd].beforeBodyMsg += "\r\n";
+                    responseStatus[m_clientFd].beforeBodyMsgLen = responseStatus[m_clientFd].beforeBodyMsg.size();
+
+                    // 设置标识，转换到发送数据的状态
+                    responseStatus[m_clientFd].bodyType = FILE_TYPE;    // 设置消息体的类型
+                    responseStatus[m_clientFd].status = HANDLE_HEAD;    // 设置状态为处理消息头
+                    responseStatus[m_clientFd].curStatusHasSendLen = 0; // 设置当前已发送的数据长度为0
+                }
+            }
+            else
+            {
+                // 重定向到登录页面
+                responseStatus[m_clientFd].beforeBodyMsg = getStatusLine("HTTP/1.1", "302", "Moved Temporarily");
+
+                // 构建重定向的消息首部
+                responseStatus[m_clientFd].beforeBodyMsg += getMessageHeader("0", "html", "/", "");
+
+                // 加入空行
+                responseStatus[m_clientFd].beforeBodyMsg += "\r\n";
+                responseStatus[m_clientFd].beforeBodyMsgLen = responseStatus[m_clientFd].beforeBodyMsg.size();
+
+                // 设置标识，转换到发送数据的状态
+                responseStatus[m_clientFd].bodyType = EMPTY_TYPE;   // 设置消息体的类型
+                responseStatus[m_clientFd].status = HANDLE_HEAD;    // 设置状态为处理消息头
+                responseStatus[m_clientFd].curStatusHasSendLen = 0; // 设置当前已发送的数据长度为0
+                std::cout << outHead("info") << "客户端 " << m_clientFd << " 的响应报文是重定向报文，状态行和消息首部已构建完成" << std::endl;
+            }
         }
         else if (opera == "delete")
         {
+            bool isValidUser = false;
+            std::string unid = "";
+            //! 首先检查cookie
+            if (m_httpSession.findAttribute(responseStatus[m_clientFd].cookieValue))
+            {
+                unid = responseStatus[m_clientFd].cookieValue;
+                std::cout << outHead("debug") << "Cookie存在, 通过" << std::endl;
+                isValidUser = true;
+            }
+
+            if (isValidUser)
+            {
+                std::cout << outHead("info") << "客户端 " << m_clientFd << " 选择删除某个文件:" << filename << std::endl;
+                int ret = remove(("filedir/" + filename).c_str());
+                std::cout << outHead("info") << "客户端 " << m_clientFd << " 删除文件" << ((ret == 0) ? ("成功") : ("失败")) << std::endl;
+
+                // 重定向到/login
+                responseStatus[m_clientFd].beforeBodyMsg = getStatusLine("HTTP/1.1", "302", "Moved Temporarily");
+
+                // 构建重定向的消息首部
+                responseStatus[m_clientFd].beforeBodyMsg += getMessageHeader("0", "html", "/login", "");
+                if (unid != "")
+                    responseStatus[m_clientFd].beforeBodyMsg += getMessageHeaderCookie(unid);
+                // 加入空行
+                responseStatus[m_clientFd].beforeBodyMsg += "\r\n";
+                responseStatus[m_clientFd].beforeBodyMsgLen = responseStatus[m_clientFd].beforeBodyMsg.size();
+
+                // 设置标识，转换到发送数据的状态
+                responseStatus[m_clientFd].bodyType = EMPTY_TYPE;   // 设置消息体的类型
+                responseStatus[m_clientFd].status = HANDLE_HEAD;    // 设置状态为处理消息头
+                responseStatus[m_clientFd].curStatusHasSendLen = 0; // 设置当前已发送的数据长度为0
+                std::cout << outHead("info") << "客户端 " << m_clientFd << " 的响应报文是重定向报文，状态行和消息首部已构建完成" << std::endl;
+            }
+            else // todo 代码优化 重定向到 /
+            {
+                responseStatus[m_clientFd].beforeBodyMsg = getStatusLine("HTTP/1.1", "302", "Moved Temporarily");
+
+                // 构建重定向的消息首部
+                responseStatus[m_clientFd].beforeBodyMsg += getMessageHeader("0", "html", "/", "");
+
+                // 加入空行
+                responseStatus[m_clientFd].beforeBodyMsg += "\r\n";
+                responseStatus[m_clientFd].beforeBodyMsgLen = responseStatus[m_clientFd].beforeBodyMsg.size();
+
+                // 设置标识，转换到发送数据的状态
+                responseStatus[m_clientFd].bodyType = EMPTY_TYPE;   // 设置消息体的类型
+                responseStatus[m_clientFd].status = HANDLE_HEAD;    // 设置状态为处理消息头
+                responseStatus[m_clientFd].curStatusHasSendLen = 0; // 设置当前已发送的数据长度为0
+                std::cout << outHead("info") << "客户端 " << m_clientFd << " 的响应报文是重定向报文，状态行和消息首部已构建完成" << std::endl;
+            }
         }
         else // 重定向到 /
         {
@@ -419,6 +597,34 @@ void HandleSend::process()
             }
             else if (responseStatus[m_clientFd].bodyType == FILE_TYPE)
             {
+                sentLen = responseStatus[m_clientFd].curStatusHasSendLen;
+                sentLen = sendfile(m_clientFd, responseStatus[m_clientFd].fileMsgFd, (off_t*)sentLen, responseStatus[m_clientFd].msgBodyLen - sentLen);
+                if (sentLen == -1)
+                {
+                    if (errno != EAGAIN)
+                    {
+                        // 如果不是缓冲区满，设置发送失败状态
+                        requestStatus[m_clientFd].status = HANDLE_ERROR;
+                        std::cout << outHead("error") << "发送文件时返回 -1 (errno = " << errno << ")" << std::endl;
+                        break;
+                    }
+                    // 如果缓冲区已满，退出循环，下面会重置 EPOLLOUT 事件，等待下次进入函数继续发送
+                    break;
+                }
+
+                // 累加已发送的数据长度
+                responseStatus[m_clientFd].curStatusHasSendLen += sentLen;
+
+                // 文件发送完成后，重置 Response 为访问根目录的响应，向客户端传递文件列表
+                if (responseStatus[m_clientFd].curStatusHasSendLen >= responseStatus[m_clientFd].msgBodyLen)
+                {
+                    responseStatus[m_clientFd].status = HADNLE_COMPLATE; // 设置为事件处理完成
+                    responseStatus[m_clientFd].curStatusHasSendLen = 0;  // 设置已经发送的数据长度为 0
+
+                    std::cout << outHead("info") << "客户端 " << m_clientFd << " 请求的文件发送完成" << std::endl;
+                    break;
+                }
+
             }
             else if (responseStatus[m_clientFd].bodyType == EMPTY_TYPE) //! 这里其实它没发送
             {
@@ -488,6 +694,11 @@ std::string HandleSend::getStatusLine(const std::string &httpVersion, const std:
     statusLine += statusDes + "\r\n";
 
     return statusLine;
+}
+
+std::string HandleSend::getMessageHeaderCookie(std::string userId)
+{
+    return "Set-Cookie: userid=" + userId + "; path=/; Max-Age=600\r\n";
 }
 
 std::string HandleSend::getMessageHeader(const std::string contentLength, const std::string contentType, const std::string redirectLoction, const std::string contentRange)

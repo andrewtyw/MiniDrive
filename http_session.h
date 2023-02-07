@@ -1,5 +1,5 @@
-#ifndef HTTL_SESSION_H
-#define HTTL_SESSION_H
+#ifndef HTTP_SESSION_H
+#define HTTP_SESSION_H
 #include <string>
 #include <unistd.h>
 #include <iostream>
@@ -29,13 +29,13 @@ public:
 public:
     std::string key;
     std::string value;
-    int64_t timeout;                             // 过期时间(时间戳)
-    const static int64_t TIMEOUT_SLOT = 5; // 过期时间
+    int64_t timeout;                       // 过期时间(时间戳)
+    const static int64_t TIMEOUT_SLOT = 60; // 过期时间
 
 public:
     std::string DEBUG_toString()
     {
-        std::string returnVal = "key: " + key + " value: " + value +" Timeout: "+std::to_string(timeout);
+        std::string returnVal = "key: " + key + " value: " + value + " Timeout: " + std::to_string(timeout);
         return returnVal;
     }
 };
@@ -57,7 +57,7 @@ public:
     void setAttribute(std::string key, std::string value);
 
     // 获取key对应的value
-    std::string  getAttribute(std::string key);
+    std::string getAttribute(std::string key);
 
     // 查询是否有该key (常用, 因此在set中查找)
     bool findAttribute(std::string key);
@@ -71,18 +71,18 @@ public:
     void DEBUG_printAll()
     {
         std::vector<HttpSessionItem>::iterator it;
-        std::cout<< "In vector:"<<std::endl;
+        std::cout << "In vector:" << std::endl;
         for (it = sessionItems.begin(); it != sessionItems.end(); it++)
         {
-            std::cout<< (*it).DEBUG_toString() <<std::endl;
+            std::cout << (*it).DEBUG_toString() << std::endl;
         }
-        std::cout<< "In set:"<<std::endl;
+        std::cout << "In set:" << std::endl;
         std::unordered_set<std::string>::iterator it_S;
         for (it_S = sessionItemsSet.begin(); it_S != sessionItemsSet.end(); it_S++)
         {
-            std::cout<< (*it_S) <<", ";
+            std::cout << (*it_S) << ", ";
         }
-        std::cout<<"size: "<<sessionItemsSet.size()<<std::endl;
+        std::cout << "size: " << sessionItemsSet.size() << std::endl;
     }
 
 private:

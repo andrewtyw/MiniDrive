@@ -116,7 +116,7 @@ void threadpool<T>::run(int thread_no)
         //printf("No %d thread process\n", thread_no);
         std::cout << outHead("info") << "线程, No.= " << thread_no << " 开始处理事件" << std::endl;
         request->process(); // 进行处理
-        std::cout << outHead("info") << "线程, No.= " << thread_no << " 结束处理事件" << std::endl;
+        std::cout << outHead("info") << "线程, No.= " << thread_no << " 结束处理事件\n" << std::endl;
     }
     std::cout << outHead("info") << "线程, No.= " << thread_no << " 退出\n" << std::endl;
 }

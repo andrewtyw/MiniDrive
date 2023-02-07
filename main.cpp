@@ -13,12 +13,14 @@
 #include "threadpool.h"
 #include "http_msg.h"
 #include "utils.h"
+#include "http_session.h"
 
 
 #define MAX_FD 10
+#define TIMESLOT 5
 #define MAX_EVENT_NUMBER 1024
 
-
+static int pipefd[2];//! 用于信号通信的管道, 1端写信号, 0端读信号
 
 void addfd(int epollfd, int fd, bool one_shot)
 {
@@ -45,6 +47,16 @@ void addsig( int sig, void( handler )(int), bool restart = true )
     sigfillset( &sa.sa_mask );
     assert( sigaction( sig, &sa, NULL ) != -1 );
 }
+
+void sig_handler( int sig )
+{
+    int save_errno = errno;
+    int msg = sig;
+    send( pipefd[1], ( char* )&msg, 1, 0 );
+    errno = save_errno;
+}
+
+
 
 void show_error( int connfd, const char* info )
 {
@@ -108,9 +120,20 @@ int main(int argc, char const *argv[])
     }
     std::cout << outHead("info") << "epoll 中添加监听套接字成功" << std::endl;
     
+    //! 创建信号管道
+    ret = socketpair( PF_UNIX, SOCK_STREAM, 0, pipefd );
+    assert( ret != -1 );
+    setNonBlocking( pipefd[1] );
+    addfd( epollfd, pipefd[0], true ); //! 由于信号不是线程来处理的, 因此不需要设置oneshot
+
+    //! 添加定时信号
+    addsig(SIGALRM, sig_handler);
+    alarm( TIMESLOT ); // 每次接受到SIGALRM信号之后, 要重新设置alarm()
 
     
     EventBase* event = NULL;
+    HttpSession & httpSession = HttpSession::get_instance();
+
     while( true )
     {
         int number = epoll_wait( epollfd, events, MAX_EVENT_NUMBER, -1 );
@@ -126,6 +149,11 @@ int main(int argc, char const *argv[])
             {
                 event = new AcceptConn(sockfd, epollfd);
             }
+            else if(( sockfd == pipefd[0] ) && ( events[i].events & EPOLLIN ))
+            {
+                event = new HandleSig(pipefd[0], epollfd, httpSession);
+                alarm( TIMESLOT ); // 重新定时
+            }
             else if( events[i].events & ( EPOLLRDHUP | EPOLLHUP | EPOLLERR ) )
             {
                 // users[sockfd].close_conn();
@@ -136,7 +164,7 @@ int main(int argc, char const *argv[])
             }
             else if( events[i].events & EPOLLOUT )
             {
-                event = new HandleSend(events[i].data.fd, epollfd);
+                event = new HandleSend(events[i].data.fd, epollfd, httpSession);
             }
             else
             {}
