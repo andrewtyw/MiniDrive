@@ -138,7 +138,7 @@ void HandleRecv::process()
                     { // 如果接收的是文件，设置消息体中文件的处理状态
                         requestStatus[m_clientFd].fileMsgStatus = FILE_BEGIN_FLAG;
                     }
-                    std::cout << outHead("info") << "处理客户端 " << m_clientFd << " 的消息首部完成，开始处理请求体" << std::endl;
+                    std::cout << outHead("info") << "处理客户端 " << m_clientFd << " 的消息首部完成, 发送的是文件" << std::endl;
                     break;
                 }
                 else
@@ -172,13 +172,166 @@ void HandleRecv::process()
                 std::string::size_type beginSize = requestStatus[m_clientFd].recvMsg.size();
 
                 // 发送的是文件
+                /* e.g., requestStatus[m_clientFd].recvMsg=
+                ----------------------------952088730130722999054599(\r\n)
+                Content-Disposition: form-data; name="host"; filename="test.txt"(\r\n)
+                Content-Type: application/octet-stream(\r\n)
+                (\r\n)
+                123456789(\r\n)
+                ----------------------------952088730130722999054599--(\r\n)
+                */
                 if (requestStatus[m_clientFd].msgHeader["Content-Type"] == "multipart/form-data")
                 {
-                    responseStatus[m_clientFd].bodyFileName = "/redirect";
-                    modifyWaitFd(m_epollFd, m_clientFd, true, true, true);
-                    requestStatus[m_clientFd].status = HADNLE_COMPLATE;
-                    std::cout << outHead("error") << "客户端 " << m_clientFd << " 的 POST 请求中接收到不能处理的数据，添加 Response 写事件，返回重定向到文件列表的报文" << std::endl;
-                    break;
+                    std::cout << outHead("debug") << "body消息:\n"
+                              << requestStatus[m_clientFd].recvMsg << "<END>" << std::endl;
+                    if (requestStatus[m_clientFd].fileMsgStatus == FILE_BEGIN_FLAG)
+                    {
+                        endIndex = requestStatus[m_clientFd].recvMsg.find("\r\n");
+                        if (endIndex != std::string::npos)
+                        {
+                            // 以下内容为 -- + --------------------------952088730130722999054599
+                            std::string flagStr = requestStatus[m_clientFd].recvMsg.substr(0, endIndex);
+                            // 如果是分界线, 则进入下一个查找的状态
+                            if (flagStr == "--" + requestStatus[m_clientFd].msgHeader["boundary"])
+                            {
+                                requestStatus[m_clientFd].fileMsgStatus = FILE_HEAD;
+                                requestStatus[m_clientFd].recvMsg.erase(0, endIndex + 2); // 将开始标志行删除（包括 /r/n）
+                            }
+                            else
+                            {
+                                // 如果和边界不同，表示出错，直接返回重定向报文，重新请求文件列表
+                                responseStatus[m_clientFd].bodyFileName = "/login";
+                                modifyWaitFd(m_epollFd, m_clientFd, true, true, true); // 重置可读事件和可写事件，用于发送重定向回复报文
+                                requestStatus[m_clientFd].status = HADNLE_COMPLATE;
+                                std::cout << outHead("error") << "客户端 " << m_clientFd << " 的 POST 请求体中没有找到文件头开始边界，添加重定向 Response 写事件，使客户端重定向到文件列表" << std::endl;
+                                break;
+                            }
+                        }
+                    }
+
+                    // 下一个状态: 读取文件名
+                    if (requestStatus[m_clientFd].fileMsgStatus == FILE_HEAD)
+                    {
+                        std::string strLine;
+                        while (1)
+                        {
+                            endIndex = requestStatus[m_clientFd].recvMsg.find("\r\n");
+                            if (endIndex != std::string::npos)
+                            {
+                                strLine = requestStatus[m_clientFd].recvMsg.substr(0, endIndex + 2); // 获取这一行的数据信息
+                                requestStatus[m_clientFd].recvMsg.erase(0, endIndex + 2);            // 删除这一行信息
+                                // 空行说明文件信息已经读取完了, 接下来就是读取文件内容了, 进入下一个状态
+                                if (strLine == "\r\n")
+                                {
+                                    requestStatus[m_clientFd].fileMsgStatus = FILE_CONTENT;
+                                    break;
+                                }
+                                else
+                                {
+                                    // 尝试读取文件名
+                                    endIndex = strLine.find("filename");
+                                    if (endIndex != std::string::npos) // 文件名存在
+                                    {
+                                        strLine.erase(0, endIndex + std::string("filename=\"").size()); // 将真正 filename 前的所有字符删除
+                                        for (int i = 0; strLine[i] != '\"'; ++i)
+                                        {
+                                            // 保存文件名
+                                            requestStatus[m_clientFd].recvFileName += strLine[i];
+                                        }
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                break; // body的传输还没有完成, 退出等下一个线程读取
+                            }
+                        }
+                    }
+
+                    // 下一个状态, 读取文件的内容
+                    /* e.g.,
+                    123456789(\r\n)
+                    ----------------------------952088730130722999054599--(\r\n)
+                    */
+                    if (requestStatus[m_clientFd].fileMsgStatus == FILE_CONTENT)
+                    {
+                        // 以二进制打开
+                        std::ofstream ofs("../filedir/" + requestStatus[m_clientFd].recvFileName, std::ios::out | std::ios::app | std::ios::binary);
+                        if (ofs)
+                        {
+                            while (1)
+                            {
+                                int saveLen = requestStatus[m_clientFd].recvMsg.size();
+                                if (saveLen == 0)
+                                { // 长度为空时退出循环，等待接收到数据时再处理
+                                    break;
+                                }
+                                // 在剩余的字符中搜索标志 \r
+                                endIndex = requestStatus[m_clientFd].recvMsg.find('\r');
+                                if (endIndex != std::string::npos)
+                                {
+                                    // 文件内容结束的标志位= \r\n + -- + --------------------------952088730130722999054599+ -- + \r\n
+                                    int boundarySecLen = requestStatus[m_clientFd].msgHeader["boundary"].size() + 8; // 内容结束标志的大小
+                                    // 判断找到的 \r 是不是"内容结束标志"的起始位置的\r
+                                    if (requestStatus[m_clientFd].recvMsg.size() - endIndex >= boundarySecLen)
+                                    {
+                                        // 确保\r后面的内容是否"内容结束标志"
+                                        if (requestStatus[m_clientFd].recvMsg.substr(endIndex, boundarySecLen) ==
+                                            "\r\n--" + requestStatus[m_clientFd].msgHeader["boundary"] + "--\r\n")
+                                        {
+                                            if (endIndex == 0)
+                                            { // 表示边界前的数据都已经写入文件，设置文件接收完成，进入下一个状态
+                                                std::cout << outHead("info") << "客户端 " << m_clientFd << " 的 POST 请求体中的文件数据接收并保存完成" << std::endl;
+                                                requestStatus[m_clientFd].fileMsgStatus = FILE_COMPLATE;
+                                                break;
+                                            }
+                                            else
+                                            {
+                                                saveLen = endIndex; //! 即最后保存"内容结束标志"之前的内容
+                                            }
+                                        }
+                                        else
+                                        {
+                                            // 往后搜索下一个\r, 把当前\r(包括)之前的数据写入
+                                            endIndex = requestStatus[m_clientFd].recvMsg.find('\r', endIndex + 1);
+                                            if (endIndex != std::string::npos)
+                                            {
+                                                saveLen = endIndex;
+                                            }
+                                        }
+                                    }
+                                    else
+                                    {
+                                        // 可能还没接受完这一部分数据, 因此先写入 (endIndex只可能是内容, 所以先写入)
+                                        if (endIndex == 0)
+                                        {
+                                            break;
+                                        }
+                                        else
+                                        {
+                                            saveLen = endIndex;
+                                        }
+                                    }
+                                }
+                                // 写入
+                                ofs.write(requestStatus[m_clientFd].recvMsg.c_str(), saveLen);
+                                requestStatus[m_clientFd].recvMsg.erase(0, saveLen);
+                            }
+                            ofs.close();
+                        }
+                        
+                    }
+
+                    if (requestStatus[m_clientFd].fileMsgStatus == FILE_COMPLATE)
+                    {
+                        // 设置响应消息的资源路径，在 HandleSend 中根据请求资源构建整个响应消息并发送
+                        responseStatus[m_clientFd].bodyFileName = "/login";
+                        modifyWaitFd(m_epollFd, m_clientFd, true, true, true); // 完成后重置可读事件和可写事件，用于发送重定向回复报文
+                        requestStatus[m_clientFd].status = HADNLE_COMPLATE;
+                        std::cout << outHead("info") << "客户端 " << m_clientFd << " 的 POST 请求体处理完成，添加 Response 写事件，发送重定向报文刷新文件列表" << std::endl;
+                        break;
+                    }
+                
                 }
                 // 发送的是表单数据
                 else if (requestStatus[m_clientFd].msgHeader["Content-Type"] == "application/x-www-form-urlencoded")
@@ -291,7 +444,7 @@ void HandleSend::process()
             responseStatus[m_clientFd].beforeBodyMsg = getStatusLine("HTTP/1.1", "200", "OK");
 
             // 响应体
-            getStaticHtmlPage(responseStatus[m_clientFd].msgBody, "html/login.html");
+            getStaticHtmlPage(responseStatus[m_clientFd].msgBody, "../html/login.html");
             std::cout << outHead("debug") << "msg body:\n"
                       << responseStatus[m_clientFd].msgBody << std::endl;
             responseStatus[m_clientFd].msgBodyLen = responseStatus[m_clientFd].msgBody.size();
@@ -312,7 +465,7 @@ void HandleSend::process()
         {
             bool isValidUser = false;
             std::string unid = "";
-            if ((responseStatus[m_clientFd].postForm["username"] == "tywang") && (responseStatus[m_clientFd].postForm["password"] == "123456"))
+            if ((responseStatus[m_clientFd].postForm["username"] == "admin") && (responseStatus[m_clientFd].postForm["password"] == "123456"))
             {
                 isValidUser = true;
 
@@ -343,8 +496,8 @@ void HandleSend::process()
                 // 响应行
                 responseStatus[m_clientFd].beforeBodyMsg = getStatusLine("HTTP/1.1", "200", "OK");
                 // 响应体
-                std::cout << outHead("debug") << "Mark1: " << std::endl;
-                getFileListPage(responseStatus[m_clientFd].msgBody, "filedir");
+                std::cout << outHead("debug") << "Mark1: 正在读取目录中内容" << std::endl;
+                getFileListPage(responseStatus[m_clientFd].msgBody, "../filedir");
                 std::cout << outHead("debug") << "Mark2: " << std::endl;
                 responseStatus[m_clientFd].msgBodyLen = responseStatus[m_clientFd].msgBody.size();
                 // 响应头
@@ -368,7 +521,7 @@ void HandleSend::process()
                 responseStatus[m_clientFd].beforeBodyMsg = getStatusLine("HTTP/1.1", "200", "OK");
 
                 // 响应体
-                getStaticHtmlPage(responseStatus[m_clientFd].msgBody, "html/login.html");
+                getStaticHtmlPage(responseStatus[m_clientFd].msgBody, "../html/login.html");
                 // html写入错误信息
                 std::string errorMark = "<!--ERROR-->";
                 std::string errorMsg = "<span style=\"color: red;font-size: 15px\">wrong username or password, try again</span>";
@@ -410,7 +563,7 @@ void HandleSend::process()
             {
                 std::cout << outHead("info") << "客户端 " << m_clientFd << " 选择下载某个文件:" << filename << std::endl;
                 responseStatus[m_clientFd].beforeBodyMsg = getStatusLine("HTTP/1.1", "200", "OK");
-                responseStatus[m_clientFd].fileMsgFd = open(("filedir/" + filename).c_str(), O_RDONLY);
+                responseStatus[m_clientFd].fileMsgFd = open(("../filedir/" + filename).c_str(), O_RDONLY);
                 if (responseStatus[m_clientFd].fileMsgFd == -1)
                 { // 文件打开失败时，退出当前函数（避免下面关闭文件造成错误），并重置写事件，在下次进入时回复重定向报文
                     std::cout << outHead("error") << "客户端 " << m_clientFd << " 的请求消息要下载文件 " << filename << " ，但是文件打开失败，退出当前函数，重新进入用于返回重定向报文，重定向到文件列表" << std::endl;
@@ -475,7 +628,7 @@ void HandleSend::process()
             if (isValidUser)
             {
                 std::cout << outHead("info") << "客户端 " << m_clientFd << " 选择删除某个文件:" << filename << std::endl;
-                int ret = remove(("filedir/" + filename).c_str());
+                int ret = remove(("../filedir/" + filename).c_str());
                 std::cout << outHead("info") << "客户端 " << m_clientFd << " 删除文件" << ((ret == 0) ? ("成功") : ("失败")) << std::endl;
 
                 // 重定向到/login
@@ -598,7 +751,7 @@ void HandleSend::process()
             else if (responseStatus[m_clientFd].bodyType == FILE_TYPE)
             {
                 sentLen = responseStatus[m_clientFd].curStatusHasSendLen;
-                sentLen = sendfile(m_clientFd, responseStatus[m_clientFd].fileMsgFd, (off_t*)sentLen, responseStatus[m_clientFd].msgBodyLen - sentLen);
+                sentLen = sendfile(m_clientFd, responseStatus[m_clientFd].fileMsgFd, (off_t *)sentLen, responseStatus[m_clientFd].msgBodyLen - sentLen);
                 if (sentLen == -1)
                 {
                     if (errno != EAGAIN)
@@ -624,7 +777,6 @@ void HandleSend::process()
                     std::cout << outHead("info") << "客户端 " << m_clientFd << " 请求的文件发送完成" << std::endl;
                     break;
                 }
-
             }
             else if (responseStatus[m_clientFd].bodyType == EMPTY_TYPE) //! 这里其实它没发送
             {
@@ -745,7 +897,7 @@ void HandleSend::getFileListPage(std::string &fileListHtml, std::string filedir)
 {
     std::vector<std::string> fileVec;
     getFileVec(filedir, fileVec);
-    std::ifstream fileListStream("html/filelist.html", std::ios::in);
+    std::ifstream fileListStream("../html/filelist.html", std::ios::in);
     std::string tempLine;
     std::string replaceMarker = "<!--FILELIST-->";
     while (1)

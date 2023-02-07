@@ -10,3 +10,5 @@ test.cpp
 http_conn.cpp
 http_h.cpp
 *.sh
+before_cmake
+build

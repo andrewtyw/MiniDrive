@@ -67,12 +67,7 @@ void show_error( int connfd, const char* info )
 
 int main(int argc, char const *argv[])
 {
-    const char* ip = "10.0.4.7"; 
-    int port = 8888;
-    // int port = atoi( argv[1] );
-    printf("124.223.47.124 %d\n", port);
-    printf("ip:%s, port:%d\n",ip,port);
-    addsig( SIGPIPE, SIG_IGN );
+    
 
     threadpool< EventBase >* pool = NULL;
     try
@@ -84,10 +79,6 @@ int main(int argc, char const *argv[])
         return 1;
     }
 
-    //! 删除, 或许
-    EventBase* users = new EventBase[ MAX_FD ];
-    assert( users );
-
     int user_count = 0;
 
     int listenfd = socket( PF_INET, SOCK_STREAM, 0 );
@@ -96,11 +87,14 @@ int main(int argc, char const *argv[])
     setsockopt( listenfd, SOL_SOCKET, SO_LINGER, &tmp, sizeof( tmp ) );
 
     int ret = 0;
+    int port = 8888;
     struct sockaddr_in address;
     bzero( &address, sizeof( address ) );
     address.sin_family = AF_INET;
-    inet_pton( AF_INET, ip, &address.sin_addr );
-    address.sin_port = htons( port );
+    address.sin_port = htons(port);
+    address.sin_addr.s_addr = htonl(INADDR_ANY);
+    // inet_pton( AF_INET, ip, &address.sin_addr );
+
 
     ret = bind( listenfd, ( struct sockaddr* )&address, sizeof( address ) );
     assert( ret >= 0 );
@@ -126,7 +120,8 @@ int main(int argc, char const *argv[])
     setNonBlocking( pipefd[1] );
     addfd( epollfd, pipefd[0], true ); //! 由于信号不是线程来处理的, 因此不需要设置oneshot
 
-    //! 添加定时信号
+    //! 添加信号
+    addsig( SIGPIPE, SIG_IGN );
     addsig(SIGALRM, sig_handler);
     alarm( TIMESLOT ); // 每次接受到SIGALRM信号之后, 要重新设置alarm()
 
@@ -156,7 +151,7 @@ int main(int argc, char const *argv[])
             }
             else if( events[i].events & ( EPOLLRDHUP | EPOLLHUP | EPOLLERR ) )
             {
-                // users[sockfd].close_conn();
+                //todo
             }
             else if( events[i].events & EPOLLIN )
             {
@@ -174,7 +169,6 @@ int main(int argc, char const *argv[])
     }
     close( epollfd );
     close( listenfd );
-    delete [] users;
     delete pool;
     return 0;
 }
