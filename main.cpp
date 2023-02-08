@@ -10,10 +10,10 @@
 #include <cassert>
 #include <sys/epoll.h>
 
-#include "threadpool.h"
-#include "http_msg.h"
-#include "utils.h"
-#include "http_session.h"
+#include "threadpool/threadpool.h"
+#include "httpevent/http_event.h"
+#include "utils/utils.h"
+#include "httpsession/http_session.h"
 
 
 #define MAX_FD 10
