@@ -29,6 +29,10 @@ make
 1. 日志系统
 2. 编码windows/Linux客户端来同步本地文件到远程Linux服务器
 
+## Showcase
+
+![](./utils/video.gif)
+
 ## Ref. & Acknowledgement
 - 《Linux高性能服务器编程》游双
 - WebFileServer: https://github.com/shangguanyongshi/WebFileServer

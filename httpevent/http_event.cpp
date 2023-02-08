@@ -42,7 +42,7 @@ void HandleSig::process()
             {
             case SIGALRM:
             {
-                std::cout << outHead("debug") << "接受到定时信号!" << std::endl;
+                // std::cout << outHead("debug") << "接受到定时信号!" << std::endl;
                 m_session.tick();
                 break;
             }
@@ -182,8 +182,8 @@ void HandleRecv::process()
                 */
                 if (requestStatus[m_clientFd].msgHeader["Content-Type"] == "multipart/form-data")
                 {
-                    std::cout << outHead("debug") << "body消息:\n"
-                              << requestStatus[m_clientFd].recvMsg << "<END>" << std::endl;
+                    // std::cout << outHead("debug") << "body消息:\n"
+                    //           << requestStatus[m_clientFd].recvMsg << "<END>" << std::endl;
                     if (requestStatus[m_clientFd].fileMsgStatus == FILE_BEGIN_FLAG)
                     {
                         endIndex = requestStatus[m_clientFd].recvMsg.find("\r\n");
@@ -319,7 +319,6 @@ void HandleRecv::process()
                             }
                             ofs.close();
                         }
-                        
                     }
 
                     if (requestStatus[m_clientFd].fileMsgStatus == FILE_COMPLATE)
@@ -331,34 +330,34 @@ void HandleRecv::process()
                         std::cout << outHead("info") << "客户端 " << m_clientFd << " 的 POST 请求体处理完成，添加 Response 写事件，发送重定向报文刷新文件列表" << std::endl;
                         break;
                     }
-                
                 }
                 // 发送的是表单数据
                 else if (requestStatus[m_clientFd].msgHeader["Content-Type"] == "application/x-www-form-urlencoded")
                 {
 
-                    std::cout << outHead("debug") << "开始处理form表单请求体, 当前剩余的内容:\n"
-                              << requestStatus[m_clientFd].recvMsg << std::endl;
+                    // std::cout << outHead("debug") << "开始处理form表单请求体, 当前剩余的内容:\n"
+                    //           << requestStatus[m_clientFd].recvMsg << std::endl;
                     if (requestStatus[m_clientFd].contentLength == requestStatus[m_clientFd].recvMsg.length())
                     {
                         std::cout << outHead("debug") << "接收到了请求体, 开始处理" << std::endl;
                         responseStatus[m_clientFd].bodyFileName = requestStatus[m_clientFd].rquestResourse;       // 记录request url
                         parseRequestForm(responseStatus[m_clientFd].postForm, requestStatus[m_clientFd].recvMsg); // 提取form中的key-value对
-                        std::cout << outHead("debug") << "表单Key-Value size: " << responseStatus[m_clientFd].postForm.size() << std::endl;
+                        std::cout << outHead("debug") << "x-www-form-urlencoded表单Key-Value size: " << responseStatus[m_clientFd].postForm.size() << std::endl;
                         for (auto it = responseStatus[m_clientFd].postForm.begin(); it != responseStatus[m_clientFd].postForm.end(); it++)
                         {
-                            std::cout << outHead("debug") << "表单Key-Value: " << it->first << " : " << it->second << std::endl;
+                            std::cout << outHead("debug") << "x-www-form-urlencoded表单Key-Value: " << it->first << " : " << it->second << std::endl;
                         }
 
                         // 提取信息处理完成, 开始监听写事件
                         modifyWaitFd(m_epollFd, m_clientFd, true, true, true);
                         requestStatus[m_clientFd].status = HADNLE_COMPLATE;
-                        std::cout << outHead("error") << "客户端 " << m_clientFd << " 的请求处理完成, 是POST请求表单" << std::endl;
+                        std::cout << outHead("info") << "客户端 " << m_clientFd << " 的请求处理完成, 是POST请求表单" << std::endl;
                         break;
                     }
                     else
                     {
-                        std::cout << outHead("debug") << "没有找到请求体" << std::endl; //! 需要重新设置监听吗?
+                        //! 若请求体不完整, 前面的recv返回的错误码是EAGIN, 并且已重新注册监听事件
+                        std::cout << outHead("error") << "请求体不完整" << std::endl; 
                     }
                 }
                 else
@@ -435,7 +434,7 @@ void HandleSend::process()
                 opera = "redirect";
             }
         }
-        std::cout << outHead("tywang") << "操作方法opera: " << opera << " filename:" << filename << std::endl;
+        std::cout << outHead("info") << "操作方法opera: " << opera << " filename:" << filename << std::endl;
 
         // 请求根目录, 返回login.html
         if (opera == "/")
@@ -445,8 +444,8 @@ void HandleSend::process()
 
             // 响应体
             getStaticHtmlPage(responseStatus[m_clientFd].msgBody, "../html/login.html");
-            std::cout << outHead("debug") << "msg body:\n"
-                      << responseStatus[m_clientFd].msgBody << std::endl;
+            // std::cout << outHead("debug") << "msg body:\n"
+            //           << responseStatus[m_clientFd].msgBody << std::endl;
             responseStatus[m_clientFd].msgBodyLen = responseStatus[m_clientFd].msgBody.size();
 
             // 头部
@@ -496,9 +495,9 @@ void HandleSend::process()
                 // 响应行
                 responseStatus[m_clientFd].beforeBodyMsg = getStatusLine("HTTP/1.1", "200", "OK");
                 // 响应体
-                std::cout << outHead("debug") << "Mark1: 正在读取目录中内容" << std::endl;
+                std::cout << outHead("debug") << "正在读取文件目录中内容" << std::endl;
                 getFileListPage(responseStatus[m_clientFd].msgBody, "../filedir");
-                std::cout << outHead("debug") << "Mark2: " << std::endl;
+                std::cout << outHead("debug") << "读取文件目录中内容完毕" << std::endl;
                 responseStatus[m_clientFd].msgBodyLen = responseStatus[m_clientFd].msgBody.size();
                 // 响应头
                 responseStatus[m_clientFd].beforeBodyMsg += getMessageHeader(std::to_string(responseStatus[m_clientFd].msgBodyLen), "html");
@@ -516,7 +515,7 @@ void HandleSend::process()
             else
             {
                 // todo 优化代码结构: 返回login.html页面这坨可以单独挑出来
-                std::cout << outHead("debug") << "用户名和密码错误, 即将处理登录, 返回登录页面" << filename << std::endl;
+                std::cout << outHead("info") << "用户名和密码错误, 返回登录页面" << filename << std::endl;
                 // 响应行
                 responseStatus[m_clientFd].beforeBodyMsg = getStatusLine("HTTP/1.1", "200", "OK");
 
@@ -596,18 +595,7 @@ void HandleSend::process()
             }
             else
             {
-                // 重定向到登录页面
-                responseStatus[m_clientFd].beforeBodyMsg = getStatusLine("HTTP/1.1", "302", "Moved Temporarily");
-
-                // 构建重定向的消息首部
-                responseStatus[m_clientFd].beforeBodyMsg += getMessageHeader("0", "html", "/", "");
-
-                // 加入空行
-                responseStatus[m_clientFd].beforeBodyMsg += "\r\n";
-                responseStatus[m_clientFd].beforeBodyMsgLen = responseStatus[m_clientFd].beforeBodyMsg.size();
-
-                // 设置标识，转换到发送数据的状态
-                responseStatus[m_clientFd].bodyType = EMPTY_TYPE;   // 设置消息体的类型
+                generateRedirectResponse("/");
                 responseStatus[m_clientFd].status = HANDLE_HEAD;    // 设置状态为处理消息头
                 responseStatus[m_clientFd].curStatusHasSendLen = 0; // 设置当前已发送的数据长度为0
                 std::cout << outHead("info") << "客户端 " << m_clientFd << " 的响应报文是重定向报文，状态行和消息首部已构建完成" << std::endl;
@@ -631,36 +619,14 @@ void HandleSend::process()
                 int ret = remove(("../filedir/" + filename).c_str());
                 std::cout << outHead("info") << "客户端 " << m_clientFd << " 删除文件" << ((ret == 0) ? ("成功") : ("失败")) << std::endl;
 
-                // 重定向到/login
-                responseStatus[m_clientFd].beforeBodyMsg = getStatusLine("HTTP/1.1", "302", "Moved Temporarily");
-
-                // 构建重定向的消息首部
-                responseStatus[m_clientFd].beforeBodyMsg += getMessageHeader("0", "html", "/login", "");
-                if (unid != "")
-                    responseStatus[m_clientFd].beforeBodyMsg += getMessageHeaderCookie(unid);
-                // 加入空行
-                responseStatus[m_clientFd].beforeBodyMsg += "\r\n";
-                responseStatus[m_clientFd].beforeBodyMsgLen = responseStatus[m_clientFd].beforeBodyMsg.size();
-
-                // 设置标识，转换到发送数据的状态
-                responseStatus[m_clientFd].bodyType = EMPTY_TYPE;   // 设置消息体的类型
+                generateRedirectResponse("/login");
                 responseStatus[m_clientFd].status = HANDLE_HEAD;    // 设置状态为处理消息头
                 responseStatus[m_clientFd].curStatusHasSendLen = 0; // 设置当前已发送的数据长度为0
                 std::cout << outHead("info") << "客户端 " << m_clientFd << " 的响应报文是重定向报文，状态行和消息首部已构建完成" << std::endl;
             }
-            else // todo 代码优化 重定向到 /
+            else 
             {
-                responseStatus[m_clientFd].beforeBodyMsg = getStatusLine("HTTP/1.1", "302", "Moved Temporarily");
-
-                // 构建重定向的消息首部
-                responseStatus[m_clientFd].beforeBodyMsg += getMessageHeader("0", "html", "/", "");
-
-                // 加入空行
-                responseStatus[m_clientFd].beforeBodyMsg += "\r\n";
-                responseStatus[m_clientFd].beforeBodyMsgLen = responseStatus[m_clientFd].beforeBodyMsg.size();
-
-                // 设置标识，转换到发送数据的状态
-                responseStatus[m_clientFd].bodyType = EMPTY_TYPE;   // 设置消息体的类型
+                generateRedirectResponse("/");
                 responseStatus[m_clientFd].status = HANDLE_HEAD;    // 设置状态为处理消息头
                 responseStatus[m_clientFd].curStatusHasSendLen = 0; // 设置当前已发送的数据长度为0
                 std::cout << outHead("info") << "客户端 " << m_clientFd << " 的响应报文是重定向报文，状态行和消息首部已构建完成" << std::endl;
@@ -668,17 +634,7 @@ void HandleSend::process()
         }
         else // 重定向到 /
         {
-            responseStatus[m_clientFd].beforeBodyMsg = getStatusLine("HTTP/1.1", "302", "Moved Temporarily");
-
-            // 构建重定向的消息首部
-            responseStatus[m_clientFd].beforeBodyMsg += getMessageHeader("0", "html", "/", "");
-
-            // 加入空行
-            responseStatus[m_clientFd].beforeBodyMsg += "\r\n";
-            responseStatus[m_clientFd].beforeBodyMsgLen = responseStatus[m_clientFd].beforeBodyMsg.size();
-
-            // 设置标识，转换到发送数据的状态
-            responseStatus[m_clientFd].bodyType = EMPTY_TYPE;   // 设置消息体的类型
+            generateRedirectResponse("/");
             responseStatus[m_clientFd].status = HANDLE_HEAD;    // 设置状态为处理消息头
             responseStatus[m_clientFd].curStatusHasSendLen = 0; // 设置当前已发送的数据长度为0
             std::cout << outHead("info") << "客户端 " << m_clientFd << " 的响应报文是重定向报文，状态行和消息首部已构建完成" << std::endl;
@@ -943,4 +899,20 @@ void HandleSend::getFileVec(const std::string dirName, std::vector<std::string> 
             resVec.pop_back();
         }
     }
+}
+
+void HandleSend::generateRedirectResponse(std::string redirectURL)
+{
+    // 重定向到登录页面
+    responseStatus[m_clientFd].beforeBodyMsg = getStatusLine("HTTP/1.1", "302", "Moved Temporarily");
+
+    // 构建重定向的消息首部
+    responseStatus[m_clientFd].beforeBodyMsg += getMessageHeader("0", "html", redirectURL, "");
+
+    // 加入空行
+    responseStatus[m_clientFd].beforeBodyMsg += "\r\n";
+    responseStatus[m_clientFd].beforeBodyMsgLen = responseStatus[m_clientFd].beforeBodyMsg.size();
+
+    // 设置标识，转换到发送数据的状态
+    responseStatus[m_clientFd].bodyType = EMPTY_TYPE; // 设置消息体的类型
 }

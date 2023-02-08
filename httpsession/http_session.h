@@ -29,8 +29,8 @@ public:
 public:
     std::string key;
     std::string value;
-    int64_t timeout;                       // 过期时间(时间戳)
-    const static int64_t TIMEOUT_SLOT = 60*10; // 过期时间
+    int64_t timeout;                             // 过期时间(时间戳)
+    const static int64_t TIMEOUT_SLOT = 60 * 30; // 过期时间
 
 public:
     std::string DEBUG_toString()

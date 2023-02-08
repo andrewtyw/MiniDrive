@@ -59,24 +59,24 @@ void HttpSession::setAttribute(std::string key, std::string value)
     // 已经按时间升序排好了, 当前时间为最大的时间戳, 因此直接插入到末尾
     sessionItems.push_back(sessionItem);
     sessionItemsSet.insert(key);
-    std::cout << "设置" << sessionItem.DEBUG_toString() << "当前时间:" << HttpSessionItem::refreshTimeout() - HttpSessionItem::TIMEOUT_SLOT << std::endl;
+    std::cout << "HttpSession::setAttribute():设置" << sessionItem.DEBUG_toString() << "当前时间:" << HttpSessionItem::refreshTimeout() - HttpSessionItem::TIMEOUT_SLOT << std::endl;
 }
 
 void HttpSession::tick()
 {
     if(sessionItems.empty() || sessionItemsSet.empty())
     {
-        std::cout << "session items 中没有东西可以删除" <<std::endl;
+        // std::cout << "session items 中没有东西可以删除" <<std::endl;
         return;
     }
     std::vector<HttpSessionItem>::iterator it;
     int64_t currentTime = HttpSessionItem::refreshTimeout() - HttpSessionItem::TIMEOUT_SLOT; // 要减回来
-    std::cout << "tick! current time:" << currentTime << std::endl;
+    // std::cout << "tick! current time:" << currentTime << std::endl;
     for (it = sessionItems.begin(); it != sessionItems.end(); it++)
     {
         if ((*it).timeout < currentTime)
         {
-            std::cout << "删除" << (*it).DEBUG_toString() << "当前时间:" << currentTime << std::endl;
+            std::cout << "HttpSession::tick(): 删除" << (*it).DEBUG_toString() << "当前时间:" << currentTime << std::endl;
             sessionItems.erase(it);
             if (sessionItemsSet.size() == 1)
                 sessionItemsSet.clear();

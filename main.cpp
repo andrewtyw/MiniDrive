@@ -22,19 +22,6 @@
 
 static int pipefd[2];//! 用于信号通信的管道, 1端写信号, 0端读信号
 
-void addfd(int epollfd, int fd, bool one_shot)
-{
-    epoll_event event;
-    event.data.fd = fd;
-    event.events = EPOLLIN | EPOLLET | EPOLLRDHUP;
-    if (one_shot)
-    {
-        event.events |= EPOLLONESHOT;
-    }
-    epoll_ctl(epollfd, EPOLL_CTL_ADD, fd, &event);
-    setNonBlocking(fd);
-}
-
 void addsig( int sig, void( handler )(int), bool restart = true )
 {
     struct sigaction sa;
@@ -118,7 +105,7 @@ int main(int argc, char const *argv[])
     ret = socketpair( PF_UNIX, SOCK_STREAM, 0, pipefd );
     assert( ret != -1 );
     setNonBlocking( pipefd[1] );
-    addfd( epollfd, pipefd[0], true ); //! 由于信号不是线程来处理的, 因此不需要设置oneshot
+    addWaitFd(epollfd, pipefd[0], true, true);
 
     //! 添加信号
     addsig( SIGPIPE, SIG_IGN );

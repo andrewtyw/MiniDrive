@@ -130,6 +130,9 @@ public:
     void getFileListPage(std::string &fileListHtml, std::string filedir);
     void getStaticHtmlPage(std::string &fileListHtml, const char *filename);
 
+    // 生产一个重定向的http response
+    void generateRedirectResponse(std::string redirectLink);
+
     // 获取某个目录下的所有文件名
     void getFileVec(const std::string dirName, std::vector<std::string> &resVec);
 
@@ -140,6 +143,7 @@ public:
     // contentRange = ""    : 如果是下载文件的响应报文，指定当前发送的文件范围。空字符串表示不添加该首部。
     std::string getMessageHeader(const std::string contentLength, const std::string contentType, const std::string redirectLoction = "", const std::string contentRange = "");
     std::string getMessageHeaderCookie(std::string userId);
+
 
 private:
     int m_clientFd; // 客户端套接字，向该客户端写数据
