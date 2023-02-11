@@ -43,7 +43,7 @@ void HandleSig::process()
             case SIGALRM:
             {
                 // std::cout << outHead("debug") << "接受到定时信号!" << std::endl;
-                m_session.tick();
+                httpSession.tick();
                 break;
             }
             default:
@@ -469,7 +469,7 @@ void HandleSend::process()
                 isValidUser = true;
 
                 // 如果cookieValue在session中存在, 那么重新set就好了
-                if (m_httpSession.findAttribute(responseStatus[m_clientFd].cookieValue))
+                if (httpSession.findAttribute(responseStatus[m_clientFd].cookieValue))
                 {
                     unid = responseStatus[m_clientFd].cookieValue;
                 }
@@ -478,11 +478,11 @@ void HandleSend::process()
                 {
                     unid = std::to_string(snowFlakeUtil.UniqueId());
                 }
-                m_httpSession.setAttribute(unid, "cookie");
+                httpSession.setAttribute(unid, "cookie");
             }
 
             //! 如果没有通过账号密码登录, 那么在http session 中检查是否有cookie的值
-            if (!isValidUser && m_httpSession.findAttribute(responseStatus[m_clientFd].cookieValue))
+            if (!isValidUser && httpSession.findAttribute(responseStatus[m_clientFd].cookieValue))
             {
                 unid = responseStatus[m_clientFd].cookieValue;
                 std::cout << outHead("debug") << "Cookie存在, 通过" << std::endl;
@@ -551,7 +551,7 @@ void HandleSend::process()
             bool isValidUser = false;
             std::string unid = "";
             //! 首先检查cookie
-            if (m_httpSession.findAttribute(responseStatus[m_clientFd].cookieValue))
+            if (httpSession.findAttribute(responseStatus[m_clientFd].cookieValue))
             {
                 unid = responseStatus[m_clientFd].cookieValue;
                 std::cout << outHead("debug") << "Cookie存在, 通过" << std::endl;
@@ -606,7 +606,7 @@ void HandleSend::process()
             bool isValidUser = false;
             std::string unid = "";
             //! 首先检查cookie
-            if (m_httpSession.findAttribute(responseStatus[m_clientFd].cookieValue))
+            if (httpSession.findAttribute(responseStatus[m_clientFd].cookieValue))
             {
                 unid = responseStatus[m_clientFd].cookieValue;
                 std::cout << outHead("debug") << "Cookie存在, 通过" << std::endl;

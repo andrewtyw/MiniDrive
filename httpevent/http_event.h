@@ -66,8 +66,8 @@ public:
 class HandleSig : public EventBase
 {
 public:
-    HandleSig(int sigPipeFd, int epollFd, HttpSession &session)
-        : m_sigPipeFd(sigPipeFd), m_epollFd(epollFd), m_session(session){};
+    HandleSig(int sigPipeFd, int epollFd)
+        : m_sigPipeFd(sigPipeFd), m_epollFd(epollFd){};
     virtual ~HandleSig(){};
 
 public:
@@ -76,7 +76,6 @@ public:
 private:
     int m_sigPipeFd; // 用于接收信号的管道
     int m_epollFd;   // 接收连接后加入的 epoll
-    HttpSession &m_session;
 };
 
 // 用于接受客户端连接的事件
@@ -116,8 +115,8 @@ private:
 class HandleSend : public EventBase
 {
 public:
-    HandleSend(int clientFd, int epollFd, HttpSession &session)
-        : m_clientFd(clientFd), m_epollFd(epollFd), m_httpSession(session){};
+    HandleSend(int clientFd, int epollFd)
+        : m_clientFd(clientFd), m_epollFd(epollFd){};
     virtual ~HandleSend(){};
 
 public:
@@ -148,7 +147,6 @@ public:
 private:
     int m_clientFd; // 客户端套接字，向该客户端写数据
     int m_epollFd;  // epoll 文件描述符，在需要重置事件或关闭连接时使用
-    HttpSession &m_httpSession;
 };
 
 #endif

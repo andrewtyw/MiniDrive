@@ -1,5 +1,7 @@
 #include "http_session.h"
 
+HttpSession& httpSession = HttpSession::get_instance();
+
 bool HttpSession::findAttribute(std::string findTarget)
 {
     return (sessionItemsSet.find(findTarget) != sessionItemsSet.end());

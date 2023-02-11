@@ -11,9 +11,11 @@ A web-based linux file server.
 - 基于升序链表, 设计了一个单例的定时器来**实现**`http session`; 
 - 使用`session`和`Cookie`做验证, 从而用户的每次文件操作(e.g., 删除/下载文件) 一定程度上保证了web后端接口的安全性。
 
-
 ## Set-up
+- 推荐环境: Ubuntu 20.04, c++14, cmake: 3.24+
 ```shell
+git clone git@github.com:Andrew-wong-ty/MiniDrive.git
+cd MiniDrive/
 mkdir build
 cd build
 cmake ..

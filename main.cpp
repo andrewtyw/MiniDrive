@@ -114,7 +114,7 @@ int main(int argc, char const *argv[])
 
     
     EventBase* event = NULL;
-    HttpSession & httpSession = HttpSession::get_instance();
+    
 
     while( true )
     {
@@ -133,7 +133,7 @@ int main(int argc, char const *argv[])
             }
             else if(( sockfd == pipefd[0] ) && ( events[i].events & EPOLLIN ))
             {
-                event = new HandleSig(pipefd[0], epollfd, httpSession);
+                event = new HandleSig(pipefd[0], epollfd);
                 alarm( TIMESLOT ); // 重新定时
             }
             else if( events[i].events & ( EPOLLRDHUP | EPOLLHUP | EPOLLERR ) )
@@ -146,7 +146,7 @@ int main(int argc, char const *argv[])
             }
             else if( events[i].events & EPOLLOUT )
             {
-                event = new HandleSend(events[i].data.fd, epollfd, httpSession);
+                event = new HandleSend(events[i].data.fd, epollfd);
             }
             else
             {}

@@ -8,6 +8,10 @@
 #include <queue>
 #include <unordered_set>
 
+// 单例全局变量
+class HttpSession;
+extern HttpSession & httpSession;
+
 class HttpSessionItem
 {
 public:
