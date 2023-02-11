@@ -14,6 +14,7 @@
 #include "httpevent/http_event.h"
 #include "utils/utils.h"
 #include "httpsession/http_session.h"
+#include "../logger/Logger.h"
 
 
 #define MAX_FD 10

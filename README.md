@@ -8,8 +8,9 @@ A web-based linux file server.
 - 使用`epoll`系列系统调用来实现`Reactor`模式的`IO`复用
 - 使用有限状态机来解析`http request`, 构建`http response`和写入`http response`
 - 使用管道进行系统信号 (e.g., `SIGALRM`) 的传递
-- 基于升序链表, 设计了一个单例的定时器来**实现**`http session`; 
-- 使用`session`和`Cookie`做验证, 从而用户的每次文件操作(e.g., 删除/下载文件) 一定程度上保证了web后端接口的安全性。
+- 基于升序链表, 设计了一个单例的定时器来**实现**了一个初级的`http session`
+- 使用`session`和`Cookie`做验证, 从而用户的每次文件操作(e.g., 删除/下载文件) 一定程度上保证了web后端接口的安全性
+- 实现了一个`半异步日志系统`, `写线程`从`队列`中取出内容，写入日志本地
 
 ## Set-up
 - 推荐环境: Ubuntu 20.04, c++14, cmake: 3.24+
@@ -28,7 +29,7 @@ make
 
 ## In progress
 
-1. 日志系统
+1. ~~日志系统~~
 2. 编码windows/Linux客户端来同步本地文件到远程Linux服务器
 
 ## Showcase

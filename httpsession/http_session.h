@@ -7,6 +7,7 @@
 #include <vector>
 #include <queue>
 #include <unordered_set>
+#include "../logger/Logger.h"
 
 // 单例全局变量
 class HttpSession;

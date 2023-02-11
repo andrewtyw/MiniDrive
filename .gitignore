@@ -1,6 +1,7 @@
 .vscode
 *.o
 core.*
+*.log
 my_http_service.*
 app.*
 commit.sh
@@ -11,3 +12,4 @@ http_h.cpp
 *.sh
 before_cmake
 build
+test

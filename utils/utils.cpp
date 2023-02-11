@@ -30,6 +30,8 @@ std::string outHead(const std::string logType){
         outStr += " ["+logType+"]: ";
     }
     
+    //! 提醒有日志系统使用
+    outStr = "[!注意, cout太多改不过来了, 请使用日志系统的宏函数] " + outStr;
     return outStr;
 }
 

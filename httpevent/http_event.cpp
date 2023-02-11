@@ -11,7 +11,7 @@ void AcceptConn::process()
     accetpFd = accept(m_listenFd, (sockaddr *)&clientAddr, &clientAddrLen);
     if (accetpFd == -1)
     {
-        std::cout << outHead("info") << "接受新连接失败" << std::endl;
+        LOG_ERROR("接受新连接失败");
         perror("accept");
         return;
     }
@@ -21,7 +21,7 @@ void AcceptConn::process()
     // 将连接加入到监听，客户端套接字都设置为 EPOLLET 和 EPOLLONESHOT
     ret = addWaitFd(m_epollFd, accetpFd, true, true);
     assert(ret == 0);
-    std::cout << outHead("info") << "接受新连接 " << accetpFd << " 成功" << std::endl;
+    LOG_INFO("接受新连接 %d 成功", accetpFd);
 }
 
 void HandleSig::process()
@@ -58,7 +58,7 @@ void HandleSig::process()
 
 void HandleRecv::process()
 {
-    std::cout << outHead("info") << "开始处理客户端 " << m_clientFd << " 的一个 HandleRecv 事件" << std::endl;
+    LOG_INFO("开始处理客户端 %d 的一个 HandleRecv 事件", m_clientFd);
 
     requestStatus[m_clientFd];
 
@@ -72,7 +72,7 @@ void HandleRecv::process()
 
         if (recvLen == 0)
         {
-            std::cout << outHead("info") << "客户端 " << m_clientFd << " 关闭连接" << std::endl;
+            LOG_INFO("客户端 %d 关闭连接", m_clientFd);
             requestStatus[m_clientFd].status = HANDLE_ERROR;
             break;
         }
@@ -89,7 +89,7 @@ void HandleRecv::process()
             {
                 // 接收发生错误
                 requestStatus[m_clientFd].status = HANDLE_ERROR;
-                std::cout << outHead("error") << "接收数据时返回 -1 (errno = " << errno << ")" << std::endl;
+                LOG_INFO("接收数据时返回 -1 (errno = %d)", errno);
                 break;
             }
         }
@@ -110,10 +110,9 @@ void HandleRecv::process()
                 requestStatus[m_clientFd].setRequestLine(requestStatus[m_clientFd].recvMsg.substr(0, endIndex + 2));
                 requestStatus[m_clientFd].recvMsg.erase(0, endIndex + 2);
                 requestStatus[m_clientFd].status = HANDLE_HEAD;
-                std::cout << outHead("info") << "处理客户端 " << m_clientFd
-                          << " 的请求行完成, 请求类型为:" << requestStatus[m_clientFd].requestMethod
-                          << " 请求url:" << requestStatus[m_clientFd].rquestResourse
-                          << std::endl;
+                LOG_INFO("客户端 %d 的请求行完成, 请求类型为: %s, 请求url:%s", m_clientFd,
+                         requestStatus[m_clientFd].requestMethod.c_str(),
+                         requestStatus[m_clientFd].rquestResourse.c_str());
             }
         }
 
@@ -138,7 +137,7 @@ void HandleRecv::process()
                     { // 如果接收的是文件，设置消息体中文件的处理状态
                         requestStatus[m_clientFd].fileMsgStatus = FILE_BEGIN_FLAG;
                     }
-                    std::cout << outHead("info") << "处理客户端 " << m_clientFd << " 的消息首部完成, 发送的是文件" << std::endl;
+                    LOG_INFO("处理客户端 %d 的消息首部完成, 发送的是文件", m_clientFd);
                     break;
                 }
                 else
@@ -203,7 +202,7 @@ void HandleRecv::process()
                                 responseStatus[m_clientFd].bodyFileName = "/login";
                                 modifyWaitFd(m_epollFd, m_clientFd, true, true, true); // 重置可读事件和可写事件，用于发送重定向回复报文
                                 requestStatus[m_clientFd].status = HADNLE_COMPLATE;
-                                std::cout << outHead("error") << "客户端 " << m_clientFd << " 的 POST 请求体中没有找到文件头开始边界，添加重定向 Response 写事件，使客户端重定向到文件列表" << std::endl;
+                                LOG_ERROR("客户端 %d 的POST请求体中没有找到文件头开始边界, 重定向到文件列表", m_clientFd);
                                 break;
                             }
                         }
@@ -281,7 +280,7 @@ void HandleRecv::process()
                                         {
                                             if (endIndex == 0)
                                             { // 表示边界前的数据都已经写入文件，设置文件接收完成，进入下一个状态
-                                                std::cout << outHead("info") << "客户端 " << m_clientFd << " 的 POST 请求体中的文件数据接收并保存完成" << std::endl;
+                                                LOG_INFO("客户端 %d 的 POST 请求体中的文件数据接收并保存完成", m_clientFd);
                                                 requestStatus[m_clientFd].fileMsgStatus = FILE_COMPLATE;
                                                 break;
                                             }
@@ -327,7 +326,7 @@ void HandleRecv::process()
                         responseStatus[m_clientFd].bodyFileName = "/login";
                         modifyWaitFd(m_epollFd, m_clientFd, true, true, true); // 完成后重置可读事件和可写事件，用于发送重定向回复报文
                         requestStatus[m_clientFd].status = HADNLE_COMPLATE;
-                        std::cout << outHead("info") << "客户端 " << m_clientFd << " 的 POST 请求体处理完成，添加 Response 写事件，发送重定向报文刷新文件列表" << std::endl;
+                        LOG_INFO("客户端 %d 的 POST 请求体处理完成，添加 Response 写事件，发送重定向报文刷新文件列表", m_clientFd);
                         break;
                     }
                 }
@@ -357,7 +356,7 @@ void HandleRecv::process()
                     else
                     {
                         //! 若请求体不完整, 前面的recv返回的错误码是EAGIN, 并且已重新注册监听事件
-                        std::cout << outHead("error") << "请求体不完整" << std::endl; 
+                        std::cout << outHead("error") << "请求体不完整" << std::endl;
                     }
                 }
                 else
@@ -365,7 +364,7 @@ void HandleRecv::process()
                     responseStatus[m_clientFd].bodyFileName = "/redirect";
                     modifyWaitFd(m_epollFd, m_clientFd, true, true, true);
                     requestStatus[m_clientFd].status = HADNLE_COMPLATE;
-                    std::cout << outHead("error") << "客户端 " << m_clientFd << " 的 POST 请求中接收到不能处理的数据，添加 Response 写事件，返回重定向到文件列表的报文" << std::endl;
+                    LOG_INFO("客户端 %d 的 POST 请求中接收到不能处理的数据，添加 Response 写事件，返回重定向到文件列表的报文", m_clientFd);
                     break;
                 }
             }
@@ -374,12 +373,12 @@ void HandleRecv::process()
 
     if (requestStatus[m_clientFd].status == HADNLE_COMPLATE)
     {
-        std::cout << outHead("info") << "处理客户端 " << m_clientFd << " 的请求消息成功" << std::endl;
+        LOG_INFO("处理客户端 %d 的请求消息成功", m_clientFd);
         requestStatus.erase(m_clientFd); // 从map中删除
     }
     else if (requestStatus[m_clientFd].status == HANDLE_ERROR)
     {
-        std::cout << outHead("error") << "客户端 " << m_clientFd << " 的请求消息处理失败，关闭连接" << std::endl;
+        LOG_ERROR("客户端 %d 的请求消息处理失败，关闭连接", m_clientFd);
         // 先删除监听的文件描述符
         deleteWaitFd(m_epollFd, m_clientFd);
         // 再关闭文件描述符
@@ -392,7 +391,7 @@ void HandleRecv::process()
 
 void HandleSend::process()
 {
-    std::cout << outHead("info") << "开始处理客户端 " << m_clientFd << " 的一个 HandleSend 事件" << std::endl;
+    LOG_INFO("开始处理客户端 %d 的一个 HandleSend 事件", m_clientFd);
     if (responseStatus.find(m_clientFd) == responseStatus.end())
     {
         std::cout << outHead("info") << "客户端 " << m_clientFd << " 没有要处理的响应消息" << std::endl;
@@ -458,7 +457,7 @@ void HandleSend::process()
             responseStatus[m_clientFd].bodyType = HTML_TYPE;    // 设置消息体的类型
             responseStatus[m_clientFd].status = HANDLE_HEAD;    // 设置状态为等待发送消息头
             responseStatus[m_clientFd].curStatusHasSendLen = 0; // 设置当前已发送的数据长度为0
-            std::cout << outHead("info") << "客户端 " << m_clientFd << " 的响应消息用来返回文件列表页面，状态行和消息体已构建完成" << std::endl;
+            LOG_INFO("客户端 %d 的响应消息用来返回文件列表页面，状态行和消息体已构建完成", m_clientFd);
         }
         else if (opera == "login")
         {
@@ -485,7 +484,7 @@ void HandleSend::process()
             if (!isValidUser && httpSession.findAttribute(responseStatus[m_clientFd].cookieValue))
             {
                 unid = responseStatus[m_clientFd].cookieValue;
-                std::cout << outHead("debug") << "Cookie存在, 通过" << std::endl;
+                // std::cout << outHead("debug") << "Cookie存在, 通过" << std::endl;
                 isValidUser = true;
             }
 
@@ -624,7 +623,7 @@ void HandleSend::process()
                 responseStatus[m_clientFd].curStatusHasSendLen = 0; // 设置当前已发送的数据长度为0
                 std::cout << outHead("info") << "客户端 " << m_clientFd << " 的响应报文是重定向报文，状态行和消息首部已构建完成" << std::endl;
             }
-            else 
+            else
             {
                 generateRedirectResponse("/");
                 responseStatus[m_clientFd].status = HANDLE_HEAD;    // 设置状态为处理消息头

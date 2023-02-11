@@ -8,6 +8,7 @@
 #include <string>
 #include "locker.h"
 #include "../utils/utils.h"
+#include "../logger/Logger.h"
 
 template <typename T>
 class threadpool
@@ -118,7 +119,7 @@ void threadpool<T>::run(int thread_no)
         request->process(); // 进行处理
         std::cout << outHead("info") << "线程, No.= " << thread_no << " 结束处理事件\n" << std::endl;
     }
-    std::cout << outHead("info") << "线程, No.= " << thread_no << " 退出\n" << std::endl;
+    LOG_INFO("线程, No.= %d 退出", thread_no);
 }
 
 #endif

@@ -77,7 +77,7 @@ void Request::addHeaderOpt(const std::string &headLine)
         }
 
         msgHeader[key] = cookieValue;
-        std::cout << outHead("debug") << "cookie_key|" << cookieKey << "|cookie_value|" << cookieValue << "|" << std::endl;
+        LOG_DEBUG("在请求报文中接收到了cookie, cookie_key:%s,cookie_value:%s", cookieKey.c_str(), cookieValue.c_str());
     }
     else
     {

@@ -30,8 +30,7 @@
 #include "utils.h"
 #include "../httpsession/http_session.h"
 #include "../httpmessage/http_msg.h"
-
-
+#include "../logger/Logger.h"
 
 
 // 所有事件的基类
